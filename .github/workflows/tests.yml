@@ -1,27 +1,62 @@
 name: Tests
 
-on: [push]
+on:
+  release:
+    types: [created]
+  push:
 
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64 # Need a relatively modern platform for the actions to work
     strategy:
       max-parallel: 2
       matrix:
-        python-version: [3.7, 3.8]
-
+        python-version: [cp37-cp37m, cp38-cp38]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install tox tox-gh-actions
-    - name: Test with tox
-      run: tox
-      env:
-        PLATFORM: ${{ matrix.platform }}
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        run: |
+          echo "::add-path::/opt/python/${{ matrix.python-version }}/bin"
+          echo $PATH
+      - name: Install dependencies
+        run: pip install tox tox-gh-actions tox-wheel
+      - name: Test sdist with tox
+        run: python -m tox
+        env:
+          PLATFORM: ${{ matrix.platform }}
+      - name: Upload ${{ matrix.python-version }} sdist
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: .tox/dist/*
+      - name: Test wheel with tox
+        run: python -m tox --wheel
+        env:
+          PLATFORM: ${{ matrix.platform }}
+      - name: Audit ${{ matrix.python-version }} wheel
+        run: auditwheel repair .tox/dist/* -w wheelhouse${{ matrix.python-version }}
+      - name: Upload ${{ matrix.python-version }} wheel
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: wheelhouse${{ matrix.python-version }}/*
+
+  publish:
+    if: github.event_name == 'release' && github.event.action == 'created'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: dist
+      - name: Publish
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          python -m pip install twine
+          python -m twine check dist/*
+          python -m twine upload --skip-existing dist/*
