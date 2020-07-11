@@ -1,7 +1,7 @@
 from argparse import Namespace, ArgumentParser
 from typing import Optional, List
 
-from blagger import inject_py
+from hypno import inject_py
 
 
 def parse_args(args: Optional[List[str]]) -> Namespace:

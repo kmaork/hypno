@@ -4,7 +4,7 @@ from os import urandom, unlink
 from shutil import copy
 from pathlib import Path
 
-DATA_DIR = Path('/tmp/blagger')
+DATA_DIR = Path('/tmp/hypno')
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 injection_lib_path = Path(find_spec('.injection', __package__).origin)
