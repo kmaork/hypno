@@ -1,3 +1,3 @@
 # hypno
 
-A tool/library allowing python code injector into a running python process.
+A tool/library allowing to inject python code into a running python process.
