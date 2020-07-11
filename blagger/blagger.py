@@ -1,15 +1,17 @@
 from importlib.util import find_spec
 from pyinjector import inject
-from ctypes import CDLL, c_int, c_char_p
+from os import urandom, unlink
+from shutil import copy
+from pathlib import Path
 
-client_path = find_spec('.client', __package__).origin.encode()
-server_path = find_spec('.server', __package__).origin.encode()
+DATA_DIR = Path('/tmp/blagger')
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-server_lib = CDLL(server_path)
-server_lib.serve_py_code.argtypes = c_int, c_char_p
+injection_lib_path = Path(find_spec('.injection', __package__).origin)
 
 
 def inject_py(pid: int, python_code: bytes) -> None:
-    import threading
-    threading.Thread(target=server_lib.serve_py_code, args=(pid, python_code)).start()
-    inject(pid, client_path)
+    copied_lib = DATA_DIR / f'{urandom(3).hex()}-{python_code.hex()}'
+    copy(injection_lib_path, copied_lib)
+    inject(pid, str(copied_lib))
+    unlink(copied_lib)
