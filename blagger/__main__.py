@@ -1,13 +1,7 @@
-from argparse import ArgumentParser, Namespace
-from importlib.util import find_spec
-from typing import List, Optional
-from pyinjector import inject
+from argparse import Namespace, ArgumentParser
+from typing import Optional, List
 
-injection_path = find_spec('_injection').origin.encode()
-
-
-def inject_py(pid: int, python_code: bytes) -> None:
-    inject(pid, injection_path)
+from blagger import inject_py
 
 
 def parse_args(args: Optional[List[str]]) -> Namespace:
