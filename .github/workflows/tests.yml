@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64 # Need a relatively modern platform for the actions to work
     strategy:
-      max-parallel: 2
       matrix:
         python-version: [cp37-cp37m, cp38-cp38]
     steps:
@@ -23,8 +22,6 @@ jobs:
         run: pip install tox tox-gh-actions tox-wheel
       - name: Test sdist with tox
         run: python -m tox
-        env:
-          PLATFORM: ${{ matrix.platform }}
       - name: Upload ${{ matrix.python-version }} sdist
         uses: actions/upload-artifact@v2
         with:
@@ -32,8 +29,6 @@ jobs:
           path: .tox/dist/*
       - name: Test wheel with tox
         run: python -m tox --wheel
-        env:
-          PLATFORM: ${{ matrix.platform }}
       - name: Audit ${{ matrix.python-version }} wheel
         run: auditwheel repair .tox/dist/* -w wheelhouse${{ matrix.python-version }}
       - name: Upload ${{ matrix.python-version }} wheel
