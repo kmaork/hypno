@@ -6,6 +6,7 @@
 [![Tests (GitHub Actions)](https://github.com/kmaork/hypno/workflows/Tests/badge.svg)](https://github.com/kmaork/hypno)
 
 A tool/library allowing to inject python code into a running python process.
+Based on [kmaork/pyinjector](https://github.com/kmaork/pyinjector)
 
 ### Installation
 ```shell script
