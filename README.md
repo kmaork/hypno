@@ -4,6 +4,7 @@
 [![PyPI Supported Python Versions](https://img.shields.io/pypi/pyversions/hypno.svg)](https://pypi.python.org/pypi/hypno/)
 [![GitHub license](https://img.shields.io/github/license/kmaork/hypno)](https://github.com/kmaork/hypno/blob/master/LICENSE.txt)
 [![Tests (GitHub Actions)](https://github.com/kmaork/hypno/workflows/Tests/badge.svg)](https://github.com/kmaork/hypno)
+[![chat](https://img.shields.io/discord/850821971616858192.svg?logo=discord)](https://discord.gg/P3mN92eM2X)
 
 A tool/library allowing to inject python code into a running python process.
 Based on [kmaork/pyinjector](https://github.com/kmaork/pyinjector)
