@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
         run: |
-          echo "::add-path::/opt/python/${{ matrix.python-version }}/bin"
+          echo "/opt/python/${{ matrix.python-version }}/bin" >> $GITHUB_PATH
           echo $PATH
       - name: Install dependencies
         run: pip install tox tox-gh-actions tox-wheel
