@@ -17,5 +17,7 @@ def inject_py(pid: int, python_code: AnyStr) -> None:
         python_code = python_code.encode()
     copied_lib = DATA_DIR / f'{urandom(3).hex()}-{python_code.hex()}'
     copy(injection_lib_path, copied_lib)
-    inject(pid, str(copied_lib))
-    unlink(copied_lib)
+    try:
+        inject(pid, str(copied_lib))
+    finally:
+        unlink(copied_lib)
