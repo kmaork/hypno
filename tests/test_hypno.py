@@ -1,8 +1,10 @@
 import sys
 from subprocess import Popen, PIPE, TimeoutExpired
 from pathlib import Path
-from hypno import inject_py
+import pytest
+from hypno import inject_py, CodeTooLongException
 from time import sleep
+
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
 PROCESS_WAIT_TIMEOUT = 1
@@ -22,3 +24,9 @@ def test_hypno():
             process.kill()
             raise
         assert process.stdout.read() == data
+
+
+def test_hypno_with_too_long_code():
+    code = b'^' * 100000
+    with pytest.raises(CodeTooLongException):
+        inject_py(-1, code)
