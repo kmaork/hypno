@@ -4,9 +4,10 @@ on:
   release:
     types: [created]
   push:
+  pull_request:
 
 jobs:
-  test:
+  test_manylinux:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64 # Need a relatively modern platform for the actions to work
     strategy:
@@ -37,9 +38,46 @@ jobs:
           name: dist
           path: wheelhouse${{ matrix.python-version }}/*
 
+  test_alpine:
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - "python:3.7-alpine"
+          - "python:3.8-alpine"
+          - "python:3.9-alpine"
+          - "python:3.10-alpine"
+    steps:
+      - name: Install packages
+        # gcc and musl-dev needed for compiling the package
+        # git needed for checkout
+        # patchelf needed for auditwheel
+        run: apk add gcc musl-dev git patchelf
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: pip install tox tox-gh-actions tox-wheel auditwheel
+      - name: Test sdist with tox
+        run: python -m tox
+      - name: Upload sdist
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: .tox/dist/*
+      - name: Test wheel with tox
+        run: python -m tox --wheel
+      - name: Audit wheel
+        run: auditwheel repair .tox/dist/* -w audited_wheels
+      - name: Upload wheel
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: audited_wheels/*
+
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'
-    needs: test
+    needs: [test_manylinux, test_alpine]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
