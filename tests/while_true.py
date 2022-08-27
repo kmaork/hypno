@@ -1,5 +1,6 @@
 import time
 
-while True:
+should_exit = False
+
+while not should_exit:
     time.sleep(0.1)
-    (lambda: 0)()  # Let some tracing happen for tests
