@@ -13,7 +13,7 @@ WAIT_FOR_PYTHON_SECONDS = 0.5
 
 def test_hypno():
     data = b'test_data_woohoo'
-    process = Popen([sys.executable, WHILE_TRUE_SCRIPT], stdin=PIPE, stdout=PIPE)
+    process = Popen([sys.executable, str(WHILE_TRUE_SCRIPT)], stdin=PIPE, stdout=PIPE)
     try:
         sleep(WAIT_FOR_PYTHON_SECONDS)
         inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True')

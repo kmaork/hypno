@@ -47,5 +47,5 @@ def inject_py(pid: int, python_code: AnyStr) -> None:
                     "A dynamic link library (DLL) initialization routine failed.":
                 raise
     finally:
-        if name is not None:
-            Path(name).unlink(missing_ok=True)
+        if name is not None and Path(name).exists():
+            Path(name).unlink()
