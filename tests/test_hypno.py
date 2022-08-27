@@ -13,17 +13,14 @@ WAIT_FOR_PYTHON_SECONDS = 0.5
 
 def test_hypno():
     data = b'test_data_woohoo'
-    with Popen([sys.executable, WHILE_TRUE_SCRIPT], stdin=PIPE, stdout=PIPE) as process:
+    process = Popen([sys.executable, WHILE_TRUE_SCRIPT], stdin=PIPE, stdout=PIPE)
+    try:
         sleep(WAIT_FOR_PYTHON_SECONDS)
-        inject_py(process.pid, b'print("' + data + b'", end="");'
-                                                   b'import sys;'
-                                                   b'sys.settrace(lambda *a: exit())')
-        try:
-            assert process.wait(PROCESS_WAIT_TIMEOUT) == 0
-        except TimeoutExpired:
-            process.kill()
-            raise
+        inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True')
+        assert process.wait(PROCESS_WAIT_TIMEOUT) == 0
         assert process.stdout.read() == data
+    finally:
+        process.kill()
 
 
 def test_hypno_with_too_long_code():
