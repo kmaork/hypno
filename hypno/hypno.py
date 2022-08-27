@@ -29,5 +29,6 @@ def inject_py(pid: int, python_code: AnyStr) -> None:
     with NamedTemporaryFile() as temp:
         temp.write(lib[:code_addr])
         temp.write(python_code)
-        temp.write(lib[code_addr + len(python_code):])
+        temp.write(b'\0')
+        temp.write(lib[code_addr + len(python_code) + 1:])
         inject(pid, str(temp.name))
