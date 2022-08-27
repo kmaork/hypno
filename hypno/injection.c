@@ -5,8 +5,6 @@
 #include <errno.h>
 #include <string.h>
 
-static void init(void) __attribute__((constructor));
-
 const char *get_lib_name() {
     Dl_info dl_info;
     dladdr((void *) get_lib_name, &dl_info);
@@ -33,6 +31,7 @@ char *get_py_code_from_lib_name() {
     return py_code;
 }
 
+__attribute__((constructor))
 static void init(void) {
     int saved_errno = errno;
     char *py_code = get_py_code_from_lib_name();
