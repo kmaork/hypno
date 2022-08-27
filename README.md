@@ -7,13 +7,15 @@
 [![chat](https://img.shields.io/discord/850821971616858192.svg?logo=discord)](https://discord.gg/P3mN92eM2X)
 
 A tool/library allowing to inject python code into a running python process.
-Based on [kmaork/pyinjector](https://github.com/kmaork/pyinjector)
+Based on [kmaork/pyinjector](https://github.com/kmaork/pyinjector).
+
+If you are trying to debug a python process, check out [kmaork/madbg](https://github.com/kmaork/madbg).
 
 ### Installation
 ```shell script
 pip install hypno
 ```
-Both source distributions and `manylinux1` wheels are upoloaded to pypi for every release.
+Both source distributions, manylinux, musslinux and windows wheels are uploaded to pypi for every release.
 
 ### Usage
 #### CLI
