@@ -1,1 +1,1 @@
-from .hypno import inject_py
+from .hypno import inject_py, CodeTooLongException
