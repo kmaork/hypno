@@ -75,9 +75,47 @@ jobs:
           name: dist
           path: audited_wheels/*
 
+  test_windows:
+    runs-on: windows-2019
+    env:
+      # VIRTUALENV_PIP and VIRTUALENV_WHEEL were added to support python3.10
+      VIRTUALENV_PIP: 21.3
+      VIRTUALENV_WHEEL: 0.37
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.6", "3.7", "3.8", "3.9", "3.10" ]
+        arch: [ x86, x64 ]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.arch }}
+      - name: Install dependencies
+        # virtualenv==20.0.33 because of this https://github.com/ContinuumIO/anaconda-issues/issues/10822#issuecomment-736650629
+        run: python -m pip install tox tox-gh-actions tox-wheel virtualenv==20.0.33
+      - name: Test sdist with tox
+        run: python -m tox
+      - name: Upload ${{ matrix.python-version }} sdist
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: .tox/dist/*
+      - name: Test wheel with tox
+        run: python -m tox --wheel
+      - name: Upload ${{ matrix.python-version }} wheel
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: .tox/dist/*
+
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'
-    needs: [test_manylinux, test_alpine]
+    needs: [test_manylinux, test_alpine, test_windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
