@@ -7,7 +7,6 @@ from shutil import copy
 from pathlib import Path
 
 DATA_DIR = Path('/tmp/hypno')
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 injection_lib_path = Path(find_spec('.injection', __package__).origin)
 
@@ -15,6 +14,7 @@ injection_lib_path = Path(find_spec('.injection', __package__).origin)
 def inject_py(pid: int, python_code: AnyStr) -> None:
     if isinstance(python_code, str):
         python_code = python_code.encode()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     copied_lib = DATA_DIR / f'{urandom(3).hex()}-{python_code.hex()}'
     copy(injection_lib_path, copied_lib)
     try:
