@@ -7,7 +7,8 @@
 
 PyMODINIT_FUNC PyInit_injection(void) {return NULL;}
 
-char PYTHON_CODE[MAX_PYTHON_CODE_SIZE + 1] = "\0--- hypno code start ---" STR(MAX_PYTHON_CODE_SIZE);
+volatile char PYTHON_CODE[MAX_PYTHON_CODE_SIZE + 1] = "\0--- hypno code start ---" STR(MAX_PYTHON_CODE_SIZE);
+volatile char SAFE[] = "\1--- hypno safe marker ---";
 
 int run_python_code(char *code) {
     PyRun_SimpleString(code);
@@ -17,7 +18,13 @@ int run_python_code(char *code) {
 void inject_python() {
     if (PYTHON_CODE[0]) {
         int saved_errno = errno;
-        Py_AddPendingCall(&run_python_code, &PYTHON_CODE);
+        if (SAFE[0]) {
+            Py_AddPendingCall(&run_python_code, &PYTHON_CODE);
+        } else {
+            PyGILState_STATE gstate = PyGILState_Ensure();
+            run_python_code(PYTHON_CODE);
+            PyGILState_Release(gstate);
+        }
         errno = saved_errno;
     }
 }

@@ -1,29 +1,63 @@
 import sys
-from subprocess import Popen, PIPE, TimeoutExpired
+from contextlib import contextmanager
+from subprocess import Popen, PIPE
 from pathlib import Path
-import pytest
-from hypno import inject_py, CodeTooLongException
-from time import sleep
+from threading import Thread, current_thread, Event
 
+import pytest
+from pytest import mark
+from hypno import inject_py, CodeTooLongException, run_in_thread
+from time import sleep
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
 PROCESS_WAIT_TIMEOUT = 1
 WAIT_FOR_PYTHON_SECONDS = 0.5
 
 
-def test_hypno():
+@mark.parametrize('immediate_but_unsafe', [True, False])
+def test_inject_py(immediate_but_unsafe):
     data = b'test_data_woohoo'
     process = Popen([sys.executable, str(WHILE_TRUE_SCRIPT)], stdin=PIPE, stdout=PIPE)
     try:
         sleep(WAIT_FOR_PYTHON_SECONDS)
-        inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True')
+        inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True',
+                  immediate_but_unsafe=False)
         assert process.wait(PROCESS_WAIT_TIMEOUT) == 0
         assert process.stdout.read() == data
     finally:
         process.kill()
 
 
-def test_hypno_with_too_long_code():
+def test_inject_py_with_too_long_code():
     code = b'^' * 100000
     with pytest.raises(CodeTooLongException):
         inject_py(-1, code)
+
+
+def wait(event: Event, timeout=0.1):
+    while not event.wait(timeout):
+        pass
+
+
+@contextmanager
+def create_thread(name: str):
+    event = Event()
+    thread = Thread(name=name, target=wait, args=(event,))
+    thread.start()
+    try:
+        yield thread
+    finally:
+        event.set()
+        thread.join()
+
+
+def test_run_in_thread():
+    expected_suffix = 'bla'
+    name = 'thread name lol'
+    with create_thread(name) as thread:
+        result = run_in_thread(thread, lambda suffix: current_thread().name + suffix, expected_suffix)
+    assert result == name + expected_suffix
+
+# TODO: make test pass
+#       test with exception
+#       test with non-running thread
