@@ -21,24 +21,17 @@ jobs:
         python-version: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         run: |
           echo "/opt/python/${{ matrix.python-version }}/bin" >> $GITHUB_PATH
           echo $PATH
       - name: Install dependencies
         run: pip install tox==4.6.3 tox-gh==1.2.0
-      - name: Test sdist with tox
-        run: python -m tox
-      - name: Upload ${{ matrix.python-version }} sdist
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: .tox/.pkg/dist/*
       - name: Test wheel with tox
         run: python -m tox
-      - name: Audit ${{ matrix.python-version }} wheel
-        run: auditwheel repair .tox/.pkg/dist/* -w wheelhouse${{ matrix.python-version }}
-      - name: Upload ${{ matrix.python-version }} wheel
+      - name: Audit wheel
+        run: auditwheel repair .tox/.pkg/dist/*.whl -w wheelhouse${{ matrix.python-version }}
+      - name: Upload wheel
         uses: actions/upload-artifact@v2
         with:
           name: dist
@@ -75,7 +68,7 @@ jobs:
       - name: Test wheel with tox
         run: python -m tox
       - name: Audit wheel
-        run: auditwheel repair .tox/.pkg/dist/* -w audited_wheels
+        run: auditwheel repair .tox/.pkg/dist/*.whl -w audited_wheels
       - name: Upload wheel
         uses: actions/upload-artifact@v2
         with:
@@ -93,23 +86,16 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: true
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.arch }}
       - name: Install dependencies
         run: python -m pip install tox==4.6.3 tox-gh==1.2.0
-      - name: Test sdist with tox
+      - name: Test with tox
         run: python -m tox
-      - name: Upload ${{ matrix.python-version }} sdist
-        uses: actions/upload-artifact@v2
-        with:
-          name: dist
-          path: .tox/.pkg/dist/*
-      - name: Test wheel with tox
-        run: python -m tox
-      - name: Upload ${{ matrix.python-version }} wheel
+      - name: Upload wheel
         uses: actions/upload-artifact@v2
         with:
           name: dist
