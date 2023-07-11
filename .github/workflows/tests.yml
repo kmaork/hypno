@@ -9,7 +9,6 @@ on:
         type: boolean
   release:
     types: [created]
-  push:
   pull_request:
 
 jobs:
@@ -62,7 +61,7 @@ jobs:
         run: python -m tox
       - name: Audit wheel
         run: auditwheel repair .tox/.pkg/dist/*.whl -w audited_wheels
-      - name: Upload wheel
+      - name: Upload dists
         uses: actions/upload-artifact@v2
         with:
           name: dist
@@ -88,7 +87,29 @@ jobs:
         run: python -m pip install tox==4.6.3 tox-gh==1.2.0
       - name: Test with tox
         run: python -m tox
-      - name: Upload wheel
+      - name: Upload dists
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: .tox/.pkg/dist/*
+
+  test_mac:
+    runs-on: macos-13
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.7", "3.8", "3.9", "3.10", "3.11" ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install tox==4.6.3 tox-gh==1.2.0
+      - name: Test with tox
+        run: sudo python -m tox
+      - name: Upload dists
         uses: actions/upload-artifact@v2
         with:
           name: dist

@@ -15,7 +15,7 @@ If you are trying to debug a python process, check out [kmaork/madbg](https://gi
 ```shell script
 pip install hypno
 ```
-Both source distributions, manylinux, musslinux and windows wheels are uploaded to pypi for every release.
+Both source distributions, manylinux, musslinux, mac and windows wheels are uploaded to pypi for every release.
 
 ### Usage
 #### CLI
