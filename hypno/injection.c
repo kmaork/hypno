@@ -7,7 +7,7 @@
 
 PyMODINIT_FUNC PyInit_injection(void) {return NULL;}
 
-char PYTHON_CODE[MAX_PYTHON_CODE_SIZE + 1] = "\0--- hypno code start ---" STR(MAX_PYTHON_CODE_SIZE);
+volatile char PYTHON_CODE[MAX_PYTHON_CODE_SIZE + 1] = "\0--- hypno code start ---" STR(MAX_PYTHON_CODE_SIZE);
 
 void run_python_code() {
     if (PYTHON_CODE[0]) {
