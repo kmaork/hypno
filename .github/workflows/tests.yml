@@ -106,7 +106,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install tox==4.6.3 tox-gh==1.2.0
+        run: sudo pip install tox==4.6.3 tox-gh==1.2.0
       - name: Test with tox
         run: sudo python -m tox
       - name: Upload dists
