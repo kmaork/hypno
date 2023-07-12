@@ -1,16 +1,15 @@
-import os
+import sys
 from importlib.util import find_spec
 from threading import Thread, current_thread, Event
 from typing import AnyStr
-from pyinjector import inject
-from pyinjector.pyinjector import InjectorError
+from pyinjector import inject, InjectorError
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 
 INJECTION_LIB_PATH = Path(find_spec('.injection', __package__).origin)
 CODE_START_MARKER = b'--- hypno code start ---'
 SAFE_MARKER = b'--- hypno safe marker ---'
-WINDOWS = os.name == 'nt'
+WINDOWS = sys.platform == 'win32'
 THREAD_COMMANDS = {}
 
 
@@ -47,18 +46,26 @@ def patch_lib_safe(lib: bytearray, safe: bool) -> None:
     override(lib, marker_addr - 1, b'\1' if safe else b'\0')
 
 
-def inject_py(pid: int, python_code: AnyStr, immediate_but_unsafe=False) -> None:
+def inject_py(pid: int, python_code: AnyStr, permissions=0o644, immediate_but_unsafe=False) -> None:
+    """
+    :param pid: PID of target python process
+    :param python_code: Python code to inject to the target process.
+    :param permissions: Permissions of the generated shared library file that will be injected to the target process.
+                        Make sure the file is readable from the target process. By default, all users can read the file.
+    :param immediate_but_unsafe: TODO
+    """
     if isinstance(python_code, str):
         python_code = python_code.encode()
     lib = bytearray(INJECTION_LIB_PATH.read_bytes())
     patch_lib_code(lib, python_code)
     patch_lib_safe(lib, not immediate_but_unsafe)
-    name = None
+    path = None
     try:
-        # Can't delete a loaded shared library on Windows
+        # delete=False because can't delete a loaded shared library on Windows
         with NamedTemporaryFile(prefix='hypno', suffix=INJECTION_LIB_PATH.suffix, delete=False) as temp:
-            name = temp.name
+            path = Path(temp.name)
             temp.write(lib)
+        path.chmod(permissions)
         try:
             inject(pid, str(temp.name))
         except InjectorError as e:
@@ -68,8 +75,8 @@ def inject_py(pid: int, python_code: AnyStr, immediate_but_unsafe=False) -> None
                     "A dynamic link library (DLL) initialization routine failed.":
                 raise
     finally:
-        if name is not None and Path(name).exists():
-            Path(name).unlink()
+        if path is not None and path.exists():
+            path.unlink()
 
 
 class ThreadCommand:

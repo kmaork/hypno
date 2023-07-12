@@ -36,8 +36,8 @@ void inject_python() {
         switch( fdwReason ) {
             case DLL_PROCESS_ATTACH:
                 inject_python();
+                // "Failing" so the library is immediately unloaded
                 return FALSE;
-                break;
         }
         return TRUE;
     }

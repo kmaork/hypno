@@ -15,7 +15,7 @@ If you are trying to debug a python process, check out [kmaork/madbg](https://gi
 ```shell script
 pip install hypno
 ```
-Both source distributions, manylinux, musslinux and windows wheels are uploaded to pypi for every release.
+Both source distributions, manylinux, musslinux, mac and windows wheels are uploaded to pypi for every release.
 
 ### Usage
 #### CLI
@@ -37,3 +37,8 @@ injects it with another print statement using hypno.
 python -c "import os, time; print('Hello from', os.getpid()); time.sleep(0.5)" &\
 hypno $! "import os; print('Hello again from', os.getpid())"
 ```
+
+### Security
+Hypno briefly generates a temporary file containing the requested python code.
+This file is given 644 permissions by default, which means all users can read it.
+To use custom permissions, you can pass the `permissions` argument to `inject_py()`.

@@ -10,14 +10,17 @@ from hypno import inject_py, CodeTooLongException, run_in_thread
 from time import sleep
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
-PROCESS_WAIT_TIMEOUT = 1
-WAIT_FOR_PYTHON_SECONDS = 0.5
+PROCESS_WAIT_TIMEOUT = 1.5
+WAIT_FOR_PYTHON_SECONDS = 0.75
 
 
 @mark.parametrize('immediate_but_unsafe', [True, False])
 def test_inject_py(immediate_but_unsafe):
+    # In new virtualenv versions on Windows, python.exe invokes the original python.exe as a subprocess, so the
+    # injection does not affect the target python process.
+    python = getattr(sys, '_base_executable', sys.executable)
     data = b'test_data_woohoo'
-    process = Popen([sys.executable, str(WHILE_TRUE_SCRIPT)], stdin=PIPE, stdout=PIPE)
+    process = Popen([python, str(WHILE_TRUE_SCRIPT)], stdin=PIPE, stdout=PIPE)
     try:
         sleep(WAIT_FOR_PYTHON_SECONDS)
         inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True',
@@ -61,3 +64,4 @@ def test_run_in_thread():
 # TODO: make test pass
 #       test with exception
 #       test with non-running thread
+#       test delay of each method when target is in syscall and in c call
