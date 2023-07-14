@@ -32,7 +32,7 @@ inject_py(pid, python_code)
 
 #### Example
 This example runs a python program that prints its pid, and then attaches to the newly created process and
-injects it with another print statement using hypno.
+injects it with another print statement using hypno. Mac users will need to use `sudo` for the second command.
 ```shell script
 python -c "import os, time; print('Hello from', os.getpid()); time.sleep(0.5)" &\
 hypno $! "import os; print('Hello again from', os.getpid())"
