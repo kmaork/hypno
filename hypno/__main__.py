@@ -8,6 +8,7 @@ def parse_args(args: Optional[List[str]]) -> Namespace:
     parser = ArgumentParser(description='Inject python code into a running python process.')
     parser.add_argument('pid', type=int, help='pid of the process to inject code into')
     parser.add_argument('python_code', type=str.encode, help='python code to inject')
+    # TODO: add option for unsafe
     return parser.parse_args(args)
 
 
