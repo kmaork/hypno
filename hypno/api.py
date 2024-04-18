@@ -45,14 +45,7 @@ def inject_py(pid: int, python_code: AnyStr, permissions=0o644) -> None:
             temp.write(b'\0')
             temp.write(lib[code_addr + len(python_code) + 1:])
         path.chmod(permissions)
-        try:
-            inject(pid, str(temp.name))
-        except InjectorError as e:
-            # On Windows we are failing the load on purpose so the library will be immediately unloaded
-            if not WINDOWS or e.ret_val != -5 or e.error_str != \
-                    "LoadLibrary in the target process failed: " \
-                    "A dynamic link library (DLL) initialization routine failed.":
-                raise
+        inject(pid, str(temp.name), uninject=True)
     finally:
         if path is not None and path.exists():
             path.unlink()

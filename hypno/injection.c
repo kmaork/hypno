@@ -26,8 +26,7 @@ void run_python_code() {
         switch( fdwReason ) {
             case DLL_PROCESS_ATTACH:
                 run_python_code();
-                // "Failing" so the library is immediately unloaded
-                return FALSE;
+                break;
         }
         return TRUE;
     }
