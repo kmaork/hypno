@@ -17,7 +17,7 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64 # Need a relatively modern platform for the actions to work
     strategy:
       matrix:
-        python-version: [cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
+        python-version: [cp38-cp38, cp39-cp39, cp310-cp310, cp311-cp311]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -25,7 +25,7 @@ jobs:
           echo "/opt/python/${{ matrix.python-version }}/bin" >> $GITHUB_PATH
           echo $PATH
       - name: Install dependencies
-        run: pip install tox==4.6.3 tox-gh==1.2.0
+        run: pip install tox==4.14.2 tox-gh==1.2.0
       - name: Test wheel with tox
         run: python -m tox
       - name: Audit wheel
@@ -43,7 +43,6 @@ jobs:
       fail-fast: false
       matrix:
         container:
-          - "python:3.7-alpine"
           - "python:3.8-alpine"
           - "python:3.9-alpine"
           - "python:3.10-alpine"
@@ -56,7 +55,7 @@ jobs:
         run: apk add gcc musl-dev git patchelf
       - uses: actions/checkout@v2
       - name: Install dependencies
-        run: pip install tox==4.6.3 tox-gh==1.2.0 auditwheel
+        run: pip install tox==4.14.2 tox-gh==1.2.0 auditwheel
       - name: Test wheel with tox
         run: python -m tox
       - name: Audit wheel
@@ -72,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.7", "3.8", "3.9", "3.10", "3.11" ]
+        python-version: [ "3.8", "3.9", "3.10", "3.11" ]
         arch: [ x86, x64 ]
     steps:
       - uses: actions/checkout@v2
@@ -84,7 +83,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.arch }}
       - name: Install dependencies
-        run: python -m pip install tox==4.6.3 tox-gh==1.2.0
+        run: python -m pip install tox==4.14.2 tox-gh==1.2.0
       - name: Test with tox
         run: python -m tox
       - name: Upload dists
@@ -98,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.7", "3.8", "3.9", "3.10", "3.11" ]
+        python-version: [ "3.8", "3.9", "3.10", "3.11" ]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -106,7 +105,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: sudo python -m pip install tox==4.6.3 tox-gh==1.2.0
+        run: sudo python -m pip install tox==4.14.2 tox-gh==1.2.0
       - name: Test with tox
         run: sudo -E python -m tox
       - name: Upload dists
