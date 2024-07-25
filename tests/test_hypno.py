@@ -3,8 +3,9 @@ from subprocess import Popen, PIPE
 from pathlib import Path
 import pytest
 from pytest import mark, fixture
+from tempfile import NamedTemporaryFile
 
-from hypno import inject_py, CodeTooLongException
+from hypno import inject_py, inject_py_script, CodeTooLongException
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
 PROCESS_WAIT_TIMEOUT = 1.5
@@ -32,6 +33,16 @@ def process(process_loop_output, process_end_output):
     yield process
     process.kill()
 
+def write_code_to_temp_file(code: bytes, use_thread: bool) -> Path:
+    with NamedTemporaryFile(delete=False) as temp:
+        if use_thread:
+            temp.write(b"from threading import Thread\n")
+            temp.write(b"def x(): " + code + b"\n")
+            temp.write(b"\nThread(target=x).start()\n")
+        else:
+            temp.write(code)
+        temp.flush()
+        return Path(temp.name)
 
 def start_in_thread_code(code: bytes, use_thread: bool) -> bytes:
     if not use_thread:
@@ -49,6 +60,24 @@ def test_hypno(process: Popen, times: int, thread: bool, process_loop_output: st
     data = b'test_data_woohoo'
     for _ in range(times - 1):
         inject_py(process.pid, start_in_thread_code(b'print("' + data + b'", end="");', thread))
+        # Making sure the process is still working
+        process.stderr.read(len(process_loop_output))
+    inject_py(process.pid, start_in_thread_code(b'__import__("__main__").should_exit = True', thread))
+    assert process.wait(PROCESS_WAIT_TIMEOUT) == 0
+
+    stdout = process.stdout.read()
+    stderr = process.stderr.read()
+    assert stderr.endswith(process_end_output.encode()), stderr
+    assert stdout == data * (times - 1), stdout
+
+
+@mark.parametrize('times', [0, 1, 2, 3])
+@mark.parametrize('thread', [True, False])
+def test_hypno_script(process: Popen, times: int, thread: bool, process_loop_output: str, process_end_output: str):
+    data = b'test_data_woohoo'
+    for _ in range(times - 1):
+        tmp_file = write_code_to_temp_file(b'print("' + data + b'", end="");', thread)
+        inject_py_script(process.pid, tmp_file)
         # Making sure the process is still working
         process.stderr.read(len(process_loop_output))
     inject_py(process.pid, start_in_thread_code(b'__import__("__main__").should_exit = True', thread))
