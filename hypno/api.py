@@ -8,6 +8,7 @@ from pathlib import Path
 
 INJECTION_LIB_PATH = Path(find_spec('.injection', __package__).origin)
 MAGIC = b'--- hypno code start ---'
+PATH_SENTINEL = b'--- hypno script path start ---'
 WINDOWS = sys.platform == 'win32'
 
 
@@ -49,3 +50,34 @@ def inject_py(pid: int, python_code: AnyStr, permissions=0o644) -> None:
     finally:
         if path is not None and path.exists():
             path.unlink()
+
+def inject_py_script(pid: int, python_script: Path, permissions=0o644) -> None:
+    """
+    :param pid: PID of target python process
+    :param python_script: Path to python script to inject to the target process.
+    :param permissions: Permissions of the generated shared library file that will be injected to the target process.
+                        Make sure the file is readable from the target process. By default, all users can read the file.
+    """
+
+    script_path_null_terminated = str(python_script).encode() + b'\0'
+
+    lib = INJECTION_LIB_PATH.read_bytes()
+    magic_addr = lib.find(PATH_SENTINEL)
+    path_str_addr = magic_addr - 1
+
+    patched_lib = bytearray(lib)
+    patched_lib[path_str_addr:(path_str_addr + len(script_path_null_terminated))] = script_path_null_terminated
+
+    path = None
+    try:
+        # delete=False because can't delete a loaded shared library on Windows
+        with NamedTemporaryFile(prefix='hypno', suffix=INJECTION_LIB_PATH.suffix, delete=False) as temp:
+            path = Path(temp.name)
+            temp.write(patched_lib)
+        print(f"Injecting {path} into {pid}")
+        path.chmod(permissions)
+        inject(pid, str(temp.name), uninject=True)
+    finally:
+        pass
+        # if path is not None and path.exists():
+            # path.unlink()
