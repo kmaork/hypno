@@ -74,6 +74,9 @@ def test_hypno(process: Popen, times: int, thread: bool, process_loop_output: st
 @mark.parametrize('times', [0, 1, 2, 3])
 @mark.parametrize('thread', [True, False])
 def test_hypno_script(process: Popen, times: int, thread: bool, process_loop_output: str, process_end_output: str):
+    if thread and (sys.platform == "win32" or (sys.platform == "darwin" and sys.version_info[:2] == (3, 8))):
+        pytest.xfail("Starting a thread from injection makes inject() never return on windows, "
+                    "and output an exception on macos in python 3.8")
     data = b'test_data_woohoo'
     for _ in range(times - 1):
         tmp_file = write_code_to_temp_file(b'print("' + data + b'", end="");', thread)
