@@ -43,6 +43,8 @@ def start_in_thread_code(code: bytes, use_thread: bool) -> bytes:
 @mark.parametrize('times', [0, 1, 2, 3])
 @mark.parametrize('thread', [True, False])
 def test_hypno(process: Popen, times: int, thread: bool, process_loop_output: str, process_end_output: str):
+    if sys.platform == "linux" and "musl" in open("/proc/self/maps").read():
+        pytest.xfail("inject_py uninjects the library, which pyinjector's injector cannot do under musl libc")
     if thread and (sys.platform == "win32" or (sys.platform == "darwin" and sys.version_info[:2] == (3, 8))):
         pytest.xfail("Starting a thread from injection makes inject() never return on windows, "
                      "and output an exception on macos in python 3.8")
