@@ -1,4 +1,6 @@
 from __future__ import annotations
+import ctypes
+import subprocess
 import sys
 import warnings
 from importlib.util import find_spec
@@ -171,6 +173,20 @@ class ThreadCommand:
         return self.result
 
 
+# Run by run_in_thread's helper process. It waits for a line on stdin, so we can allow it to ptrace us first.
+_THREAD_INJECTOR_CODE = ('import sys, hypno; sys.stdin.readline(); '
+                         'hypno.inject_py(int(sys.argv[1]), sys.argv[2], immediate_but_unsafe=True)')
+_PR_SET_PTRACER = 0x59616d61
+
+
+def _set_ptracer(pid: int) -> None:
+    """
+    Allow the given process to ptrace us under yama's ptrace_scope=1 (0 disallows again).
+    Fails silently where yama is disabled. Note that this overrides any previous PR_SET_PTRACER of the process.
+    """
+    ctypes.CDLL(None, use_errno=True).prctl(_PR_SET_PTRACER, ctypes.c_ulong(pid), 0, 0, 0)
+
+
 # Commands awaiting execution in a specific thread, keyed by target native id.
 THREAD_COMMANDS: Dict[int, ThreadCommand] = {}
 
@@ -202,15 +218,19 @@ def run_in_thread(thread: Thread, func: Callable, *args: Any, **kwargs: Any) -> 
     assert target_native_id is not None
     command = ThreadCommand(func, args, kwargs)
     THREAD_COMMANDS[target_native_id] = command
+    code = f'__import__("sys").modules[{__name__!r}].THREAD_COMMANDS[{target_native_id}].execute()'
     try:
-        from multiprocessing import get_context
-        # 'spawn' avoids forking a multithreaded process (which is unsafe).
-        with get_context('spawn').Pool(1) as pool:
-            pool.apply(func=inject_py,
-                       args=(target_native_id,
-                             f'__import__("sys").modules[{__name__!r}].'
-                             f'THREAD_COMMANDS[{target_native_id}].execute()'),
-                       kwds=dict(immediate_but_unsafe=True))
+        # A plain subprocess rather than multiprocessing, whose spawned child would re-run our __main__ script.
+        injector = subprocess.Popen([sys.executable, '-c', _THREAD_INJECTOR_CODE, str(target_native_id), code],
+                                    stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Under yama's ptrace_scope=1 only ancestors may ptrace us, and the injector is our child
+        _set_ptracer(injector.pid)
+        try:
+            _, error = injector.communicate(b'\n')
+        finally:
+            _set_ptracer(0)
+        if injector.returncode != 0:
+            raise RuntimeError(f'Failed injecting into thread {thread.name}:\n{error.decode(errors="replace")}')
         return command.get_result()
     finally:
         del THREAD_COMMANDS[target_native_id]

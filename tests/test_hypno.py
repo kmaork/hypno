@@ -9,7 +9,6 @@ import pytest
 from pytest import mark, param
 
 from hypno import inject_py, CodeTooLongException, run_in_thread
-from pyinjector import InjectorError
 from hypno.api import REMOTE_EXEC_AVAILABLE
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
@@ -100,11 +99,12 @@ def background_thread(name: str):
 
 
 def _run_in_thread_or_skip(thread, func, *args, **kwargs):
-    # run_in_thread must ptrace THIS process's parent (a short-lived child attaches back to us).
-    # That needs CAP_SYS_PTRACE / ptrace_scope=0, which many CI sandboxes don't grant, so skip there.
+    # run_in_thread's child process must ptrace us, which some sandboxes (e.g. ptrace_scope=2) don't allow
     try:
         return run_in_thread(thread, func, *args, **kwargs)
-    except InjectorError as e:
+    except RuntimeError as e:
+        if 'Permission' not in str(e):
+            raise
         pytest.skip(f'run_in_thread needs ptrace permission unavailable in this environment: {e}')
 
 
@@ -130,6 +130,23 @@ def test_run_in_thread_dead_thread():
         pass  # joined on context exit
     with pytest.raises(RuntimeError):
         run_in_thread(thread, lambda: None)
+
+
+@skip_thread_unsupported
+def test_run_in_thread_from_script_without_main_guard(tmp_path: Path):
+    # The helper process must not re-run the calling script, as multiprocessing's spawn would
+    script = tmp_path / 'script.py'
+    script.write_text('import threading, hypno\n'
+                      'event = threading.Event()\n'
+                      'thread = threading.Thread(target=event.wait)\n'
+                      'thread.start()\n'
+                      'print(hypno.run_in_thread(thread, lambda: threading.current_thread() is thread))\n'
+                      'event.set()\n')
+    process = Popen([sys.executable, str(script)], stdout=PIPE, stderr=PIPE)
+    out, err = process.communicate(timeout=30)
+    if b'Permission' in err:
+        pytest.skip(f'run_in_thread needs ptrace permission unavailable in this environment: {err!r}')
+    assert out.strip() == b'True', err
 
 
 @mark.skipif(not (PY314 or WINDOWS), reason='only where run_in_thread is intentionally unsupported')
