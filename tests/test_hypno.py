@@ -9,6 +9,7 @@ import pytest
 from pytest import mark, param
 
 from hypno import inject_py, CodeTooLongException, run_in_thread
+from pyinjector import InjectorError
 from hypno.api import REMOTE_EXEC_AVAILABLE
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
@@ -98,17 +99,27 @@ def background_thread(name: str):
         thread.join()
 
 
+def _run_in_thread_or_skip(thread, func, *args, **kwargs):
+    # run_in_thread must ptrace THIS process's parent (a short-lived child attaches back to us).
+    # That needs CAP_SYS_PTRACE / ptrace_scope=0, which many CI sandboxes don't grant, so skip there.
+    try:
+        return run_in_thread(thread, func, *args, **kwargs)
+    except InjectorError as e:
+        pytest.skip(f'run_in_thread needs ptrace permission unavailable in this environment: {e}')
+
+
 @skip_thread_unsupported
 def test_run_in_thread_runs_on_target_thread():
     name = 'my-target-thread'
     with background_thread(name) as thread:
-        result = run_in_thread(thread, lambda suffix: current_thread().name + suffix, '!')
+        result = _run_in_thread_or_skip(thread, lambda suffix: current_thread().name + suffix, '!')
     assert result == name + '!'
 
 
 @skip_thread_unsupported
 def test_run_in_thread_propagates_exception():
     with background_thread('t') as thread:
+        _run_in_thread_or_skip(thread, lambda: None)  # skip if ptrace-of-parent isn't permitted here
         with pytest.raises(ZeroDivisionError):
             run_in_thread(thread, lambda: 1 // 0)
 
