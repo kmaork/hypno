@@ -30,8 +30,11 @@ static void inject_python(void) {
 #ifdef _WIN32
     /*
      * On Windows the loader runs DllMain in a fresh thread with a normal stack,
-     * so it is safe to enter the interpreter synchronously here.
+     * so it is safe to enter the interpreter synchronously here. We still touch
+     * SAFE (honored on POSIX) so its marker isn't stripped from the DLL and
+     * hypno can locate it when patching.
      */
+    (void)SAFE[0];
     {
         PyGILState_STATE gstate = PyGILState_Ensure();
         run_python_code(NULL);
