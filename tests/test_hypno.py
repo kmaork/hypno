@@ -84,10 +84,12 @@ def test_inject_py_runs_at_safe_point(monkeypatch, remote_exec: bool):
 
 @skip_unsafe_on_314
 def test_safe_point_probe_detects_immediate_injection():
-    # Control: the old immediate injection runs the code in the middle of the C call, which the probe must catch
+    # Control: the old immediate injection runs the code in the middle of the C call, which the probe must catch.
+    # (Which thread it runs on varies: the hijacked main thread on POSIX, the loader's thread on Windows.)
     result = _probe_safe_point(lambda pid: hypno.api._inject_via_pyinjector(pid, SAFE_POINT_PROBE, 0o644,
                                                                             immediate=True))
-    assert result == b'True False'
+    _, ran_after_call = result.split()
+    assert ran_after_call == b'False'
 
 
 def test_inject_py_repeatedly():
