@@ -8,17 +8,20 @@ from time import sleep
 import pytest
 from pytest import mark, param
 
+import hypno.api
 from hypno import inject_py, CodeTooLongException, run_in_thread
 from hypno.api import REMOTE_EXEC_AVAILABLE
 
 WHILE_TRUE_SCRIPT = Path(__file__).parent.resolve() / 'while_true.py'
+SLEEPING_TARGET_SCRIPT = Path(__file__).parent.resolve() / 'sleeping_target.py'
+SLEEPING_TARGET_SECONDS = 3
 PROCESS_WAIT_TIMEOUT = 5
 WAIT_FOR_PYTHON_SECONDS = 0.75
 PY314 = sys.version_info[:2] >= (3, 14)
 WINDOWS = sys.platform == 'win32'
 
 skip_no_remote_exec = mark.skipif(not REMOTE_EXEC_AVAILABLE, reason='sys.remote_exec requires CPython 3.14+')
-skip_unsafe_on_314 = mark.skipif(PY314, reason='immediate_but_unsafe aborts the target on CPython >= 3.14')
+skip_unsafe_on_314 = mark.skipif(PY314, reason='immediate injection aborts the target on CPython >= 3.14')
 skip_thread_unsupported = mark.skipif(PY314 or WINDOWS,
                                       reason='run_in_thread needs CPython < 3.14 and a non-Windows platform')
 
@@ -30,8 +33,8 @@ def _python() -> str:
 
 
 @contextmanager
-def running_target():
-    process = Popen([_python(), str(WHILE_TRUE_SCRIPT)], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+def running_target(script: Path = WHILE_TRUE_SCRIPT):
+    process = Popen([_python(), str(script)], stdin=PIPE, stdout=PIPE, stderr=PIPE)
     try:
         sleep(WAIT_FOR_PYTHON_SECONDS)
         yield process
@@ -39,29 +42,52 @@ def running_target():
         process.kill()
 
 
-def _inject_and_wait(process: Popen, backend: str, immediate_but_unsafe: bool = False) -> None:
+def _inject_and_wait(process: Popen) -> None:
     data = b'test_data_woohoo'
-    inject_py(process.pid,
-              b'print("' + data + b'", end=""); __import__("__main__").should_exit = True',
-              backend=backend, immediate_but_unsafe=immediate_but_unsafe)
+    inject_py(process.pid, b'print("' + data + b'", end=""); __import__("__main__").should_exit = True')
     assert process.wait(PROCESS_WAIT_TIMEOUT) == 0
     assert process.stdout.read() == data
 
 
-@mark.parametrize('backend', [
-    'auto',
-    'pyinjector',
-    param('remote_exec', marks=skip_no_remote_exec),
-])
-def test_inject_py(backend: str):
+def test_inject_py():
     with running_target() as process:
-        _inject_and_wait(process, backend)
+        _inject_and_wait(process)
+
+
+def test_inject_py_without_remote_exec(monkeypatch):
+    # Exercise the pyinjector fallback even where sys.remote_exec is available
+    monkeypatch.setattr(hypno.api, 'REMOTE_EXEC_AVAILABLE', False)
+    with running_target() as process:
+        _inject_and_wait(process)
+
+
+# Reports whether the injected code ran at a safe point: on the main thread, after the C call it was injected
+# during had returned (rather than re-entering the interpreter in the middle of it).
+SAFE_POINT_PROBE = (b'import threading, time; m = __import__("__main__"); '
+                    b'print(threading.current_thread() is threading.main_thread(), '
+                    b'time.monotonic() - m.sleep_started >= m.SLEEP_SECONDS, end=""); '
+                    b'm.should_exit = True')
+
+
+def _probe_safe_point(inject) -> bytes:
+    with running_target(SLEEPING_TARGET_SCRIPT) as process:
+        inject(process.pid)
+        assert process.wait(PROCESS_WAIT_TIMEOUT + SLEEPING_TARGET_SECONDS) == 0
+        return process.stdout.read()
+
+
+@mark.parametrize('remote_exec', [param(True, marks=skip_no_remote_exec), False])
+def test_inject_py_runs_at_safe_point(monkeypatch, remote_exec: bool):
+    monkeypatch.setattr(hypno.api, 'REMOTE_EXEC_AVAILABLE', remote_exec)
+    assert _probe_safe_point(lambda pid: inject_py(pid, SAFE_POINT_PROBE)) == b'True True'
 
 
 @skip_unsafe_on_314
-def test_inject_py_immediate_but_unsafe():
-    with running_target() as process:
-        _inject_and_wait(process, 'pyinjector', immediate_but_unsafe=True)
+def test_safe_point_probe_detects_immediate_injection():
+    # Control: the old immediate injection runs the code in the middle of the C call, which the probe must catch
+    result = _probe_safe_point(lambda pid: hypno.api._inject_via_pyinjector(pid, SAFE_POINT_PROBE, 0o644,
+                                                                            immediate=True))
+    assert result == b'True False'
 
 
 def test_inject_py_repeatedly():
@@ -74,10 +100,11 @@ def test_inject_py_repeatedly():
         assert process.stdout.read() == b'xxx'
 
 
-def test_inject_py_with_too_long_code():
+def test_inject_py_with_too_long_code(monkeypatch):
     # The size limit only applies to the pyinjector payload (remote_exec has none).
+    monkeypatch.setattr(hypno.api, 'REMOTE_EXEC_AVAILABLE', False)
     with pytest.raises(CodeTooLongException):
-        inject_py(-1, b'^' * 100000, backend='pyinjector')
+        inject_py(-1, b'^' * 100000)
 
 
 # ---- run_in_thread ----

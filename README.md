@@ -29,8 +29,11 @@ from hypno import inject_py
 
 inject_py(pid, python_code)
 ```
-By default the code is scheduled to run at the target interpreter's next safe point (on its main thread).
-This avoids deadlocks and is the only mode that works on CPython 3.14+.
+The code runs on the target's main thread at its interpreter's next safe point - between bytecodes, never in
+the middle of a C call - so injecting can't deadlock or corrupt the target's state.
+On CPython 3.14+ hypno uses [`sys.remote_exec`](https://peps.python.org/pep-0768/) for this when the target
+runs the same CPython version, and needs no pyinjector. Otherwise it injects a small library with
+[pyinjector](https://github.com/kmaork/pyinjector) that only schedules the code for the interpreter to run.
 
 #### Running code in a specific thread
 `run_in_thread` runs a callable in the context of an existing thread of *the current* process and returns
@@ -41,16 +44,6 @@ from hypno import run_in_thread
 result = run_in_thread(some_thread, lambda: __import__('threading').current_thread().name)
 ```
 It is currently supported on Linux/macOS with CPython < 3.14.
-
-#### Backends (and injecting without pyinjector on CPython 3.14+)
-By default (`backend='auto'`) hypno prefers [`sys.remote_exec`](https://peps.python.org/pep-0768/) when this
-interpreter supports it (CPython 3.14+) - a safe, built-in mechanism that needs no pyinjector and no compiled
-payload - and falls back to ptrace-based library injection otherwise (or when the target runs a different
-CPython version). You can force a backend:
-```python
-inject_py(pid, python_code, backend='remote_exec')  # PEP 768; target must match this CPython minor version
-inject_py(pid, python_code, backend='pyinjector')   # ptrace-based; works across CPython versions
-```
 
 #### Example
 This example runs a python program that prints its pid, and then attaches to the newly created process and

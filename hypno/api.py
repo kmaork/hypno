@@ -54,13 +54,13 @@ def _patch_lib_safe(lib: bytearray, safe: bool) -> None:
     _override(lib, marker_addr - 1, b'\1' if safe else b'\0')
 
 
-def _inject_via_pyinjector(pid: int, python_code: bytes, permissions: int, immediate_but_unsafe: bool) -> None:
-    # Imported lazily so the remote_exec backend can be used without pyinjector.
+def _inject_via_pyinjector(pid: int, python_code: bytes, permissions: int, immediate: bool) -> None:
+    # Imported lazily so hypno works without pyinjector where sys.remote_exec suffices.
     from pyinjector import inject, InjectorError
 
     lib = bytearray(INJECTION_LIB_PATH.read_bytes())
     _patch_lib_code(lib, python_code)
-    _patch_lib_safe(lib, not immediate_but_unsafe)
+    _patch_lib_safe(lib, not immediate)
     path = None
     try:
         # delete=False because a loaded shared library can't be deleted on Windows.
@@ -87,8 +87,7 @@ def _inject_via_pyinjector(pid: int, python_code: bytes, permissions: int, immed
 def _inject_via_remote_exec(pid: int, python_code: bytes) -> None:
     if not REMOTE_EXEC_AVAILABLE:
         raise RuntimeError(
-            "The 'remote_exec' backend requires sys.remote_exec, added in CPython 3.14. "
-            "The target must also run the same CPython minor version.")
+            "sys.remote_exec requires CPython 3.14+, and the target must run the same CPython minor version.")
     with NamedTemporaryFile(prefix='hypno', suffix='.py', delete=False) as temp:
         path = Path(temp.name)
         # The target reads and compiles the whole script before running it, so
@@ -109,49 +108,32 @@ def _inject_via_remote_exec(pid: int, python_code: bytes) -> None:
         raise
 
 
-def inject_py(pid: int, python_code: AnyStr, permissions: int = 0o644,
-              immediate_but_unsafe: bool = False, backend: str = 'auto') -> None:
+def inject_py(pid: int, python_code: AnyStr, permissions: int = 0o644) -> None:
     """
     Inject and run Python code in a running Python process.
 
+    The code always runs on the target's main thread, at its interpreter's next safe point (between bytecodes,
+    never in the middle of a C call). When this interpreter has sys.remote_exec (PEP 768, CPython 3.14+) and the
+    target is compatible with it, that is used. Otherwise hypno injects a small library with pyinjector, which
+    only schedules the code (Py_AddPendingCall) for the interpreter to run.
+
     :param pid: PID of the target Python process.
     :param python_code: Python code to run in the target process.
-    :param permissions: Permissions of the generated shared library file that will be injected into the
-                        target process. Make sure the file is readable from the target process. By default,
-                        all users can read the file. (Only relevant for the 'pyinjector' backend.)
-    :param immediate_but_unsafe: By default the code is scheduled to run at the target interpreter's next
-                        safe point (on its main thread). This avoids deadlocks and is the only mode that
-                        works on CPython >= 3.14. Set this to True to instead run the code immediately in the
-                        hijacked thread - useful to target a specific thread (see run_in_thread), but unsafe
-                        and unsupported on CPython >= 3.14. Forces the 'pyinjector' backend.
-    :param backend: 'auto' (default) uses sys.remote_exec when this interpreter supports it (CPython 3.14+),
-                        falling back to pyinjector otherwise or when the target isn't remote_exec-compatible.
-                        'remote_exec' forces sys.remote_exec (PEP 768; no pyinjector needed, but the target
-                        must run the same CPython minor version). 'pyinjector' forces ptrace-based library
-                        injection (works across CPython versions).
+    :param permissions: Permissions of the temporary library file injected by the pyinjector fallback.
+                        Make sure the target process can read it. By default, all users can read it.
     """
     if isinstance(python_code, str):
         python_code = python_code.encode()
     assert isinstance(python_code, bytes)
-    if backend == 'auto':
-        # Prefer sys.remote_exec: safe, built-in, and needs no compiled payload.
-        # immediate_but_unsafe (e.g. thread targeting) is a pyinjector-only feature.
-        if REMOTE_EXEC_AVAILABLE and not immediate_but_unsafe:
-            try:
-                _inject_via_remote_exec(pid, python_code)
-                return
-            except Exception as remote_err:
-                # e.g. the target runs a different CPython version. Fall back to
-                # pyinjector; if that also fails, its error (the relevant one) propagates.
-                warnings.warn(f"sys.remote_exec failed ({remote_err!r}); falling back to pyinjector.",
-                              RuntimeWarning)
-        _inject_via_pyinjector(pid, python_code, permissions, immediate_but_unsafe)
-    elif backend == 'remote_exec':
-        _inject_via_remote_exec(pid, python_code)
-    elif backend == 'pyinjector':
-        _inject_via_pyinjector(pid, python_code, permissions, immediate_but_unsafe)
-    else:
-        raise ValueError(f"Unknown backend {backend!r}, expected 'auto', 'pyinjector' or 'remote_exec'")
+    if REMOTE_EXEC_AVAILABLE:
+        try:
+            _inject_via_remote_exec(pid, python_code)
+            return
+        except Exception as remote_err:
+            # e.g. the target runs a different CPython version, or disabled remote debugging.
+            # If pyinjector fails too, its error is the relevant one.
+            warnings.warn(f"sys.remote_exec failed ({remote_err!r}); falling back to pyinjector.", RuntimeWarning)
+    _inject_via_pyinjector(pid, python_code, permissions, immediate=False)
 
 
 class ThreadCommand:
@@ -178,8 +160,9 @@ class ThreadCommand:
 # argv[1] is the directory our hypno package lives in; we put it first on sys.path so the helper imports the
 # *same* (compiled) hypno we're running, not a source checkout that happens to be the helper's cwd (python -c
 # puts cwd on sys.path[0], and a source tree has no compiled .injection extension).
-_THREAD_INJECTOR_CODE = ('import sys; sys.path.insert(0, sys.argv[1]); import hypno; sys.stdin.readline(); '
-                         'hypno.inject_py(int(sys.argv[2]), sys.argv[3], immediate_but_unsafe=True)')
+_THREAD_INJECTOR_CODE = ('import sys; sys.path.insert(0, sys.argv[1]); import hypno.api; sys.stdin.readline(); '
+                         'hypno.api._inject_via_pyinjector(int(sys.argv[2]), sys.argv[3].encode(), 0o644, '
+                         'immediate=True)')
 _PR_SET_PTRACER = 0x59616d61
 
 

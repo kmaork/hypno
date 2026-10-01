@@ -1,5 +1,7 @@
 #include <Python.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_PYTHON_CODE_SIZE 60500
 #define STR_EXPAND(tok) #tok
@@ -28,14 +30,21 @@ static void inject_python(void) {
     }
     saved_errno = errno;
 #ifdef _WIN32
-    /*
-     * On Windows the loader runs DllMain in a fresh thread with a normal stack,
-     * so it is safe to enter the interpreter synchronously here. We still touch
-     * SAFE (honored on POSIX) so its marker isn't stripped from the DLL and
-     * hypno can locate it when patching.
-     */
-    (void)SAFE[0];
-    {
+    if (SAFE[0]) {
+        /*
+         * Safe path (the default). Running the code here, inside DllMain, would hold the loader lock while
+         * waiting for the GIL, which deadlocks if the GIL holder loads a DLL. So we only schedule the code to
+         * run on the main thread at its next safe point. We are unloaded as soon as DllMain returns, so the
+         * scheduled function is Python's own PyRun_SimpleString, with a heap copy of the code (leaked, as
+         * nothing outlives us to free it).
+         */
+        size_t size = strlen((const char *)PYTHON_CODE) + 1;
+        char *code = malloc(size);
+        if (code != NULL) {
+            memcpy(code, (const char *)PYTHON_CODE, size);
+            Py_AddPendingCall((int (*)(void *))PyRun_SimpleString, code);
+        }
+    } else {
         PyGILState_STATE gstate = PyGILState_Ensure();
         run_python_code(NULL);
         PyGILState_Release(gstate);
