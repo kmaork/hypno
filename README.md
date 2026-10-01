@@ -29,6 +29,21 @@ from hypno import inject_py
 
 inject_py(pid, python_code)
 ```
+The code runs on the target's main thread at its interpreter's next safe point - between bytecodes, never in
+the middle of a C call - so injecting can't deadlock or corrupt the target's state.
+On CPython 3.14+ hypno uses [`sys.remote_exec`](https://peps.python.org/pep-0768/) for this when the target
+runs the same CPython version, and needs no pyinjector. Otherwise it injects a small library with
+[pyinjector](https://github.com/kmaork/pyinjector) that only schedules the code for the interpreter to run.
+
+#### Running code in a specific thread
+`run_in_thread` runs a callable in the context of an existing thread of *the current* process and returns
+its result (re-raising any exception):
+```python
+from hypno import run_in_thread
+
+result = run_in_thread(some_thread, lambda: __import__('threading').current_thread().name)
+```
+It is currently supported on Linux/macOS with CPython < 3.14.
 
 #### Example
 This example runs a python program that prints its pid, and then attaches to the newly created process and
