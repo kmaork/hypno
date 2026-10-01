@@ -98,12 +98,17 @@ def background_thread(name: str):
         thread.join()
 
 
+def _is_ptrace_denied(message: str) -> bool:
+    # run_in_thread's child process must ptrace us; some sandboxes (e.g. ptrace_scope=2, seccomp) forbid it.
+    lowered = message.lower()
+    return any(s in lowered for s in ('permission', 'not permitted', 'operation not permitted', 'ptrace'))
+
+
 def _run_in_thread_or_skip(thread, func, *args, **kwargs):
-    # run_in_thread's child process must ptrace us, which some sandboxes (e.g. ptrace_scope=2) don't allow
     try:
         return run_in_thread(thread, func, *args, **kwargs)
     except RuntimeError as e:
-        if 'Permission' not in str(e):
+        if not _is_ptrace_denied(str(e)):
             raise
         pytest.skip(f'run_in_thread needs ptrace permission unavailable in this environment: {e}')
 
@@ -138,13 +143,13 @@ def test_run_in_thread_from_script_without_main_guard(tmp_path: Path):
     script = tmp_path / 'script.py'
     script.write_text('import threading, hypno\n'
                       'event = threading.Event()\n'
-                      'thread = threading.Thread(target=event.wait)\n'
+                      'thread = threading.Thread(target=event.wait, daemon=True)\n'
                       'thread.start()\n'
                       'print(hypno.run_in_thread(thread, lambda: threading.current_thread() is thread))\n'
                       'event.set()\n')
     process = Popen([sys.executable, str(script)], stdout=PIPE, stderr=PIPE)
     out, err = process.communicate(timeout=30)
-    if b'Permission' in err:
+    if _is_ptrace_denied(err.decode(errors='replace')):
         pytest.skip(f'run_in_thread needs ptrace permission unavailable in this environment: {err!r}')
     assert out.strip() == b'True', err
 

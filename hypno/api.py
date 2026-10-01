@@ -1,5 +1,6 @@
 from __future__ import annotations
 import ctypes
+import os
 import subprocess
 import sys
 import warnings
@@ -174,8 +175,11 @@ class ThreadCommand:
 
 
 # Run by run_in_thread's helper process. It waits for a line on stdin, so we can allow it to ptrace us first.
-_THREAD_INJECTOR_CODE = ('import sys, hypno; sys.stdin.readline(); '
-                         'hypno.inject_py(int(sys.argv[1]), sys.argv[2], immediate_but_unsafe=True)')
+# argv[1] is the directory our hypno package lives in; we put it first on sys.path so the helper imports the
+# *same* (compiled) hypno we're running, not a source checkout that happens to be the helper's cwd (python -c
+# puts cwd on sys.path[0], and a source tree has no compiled .injection extension).
+_THREAD_INJECTOR_CODE = ('import sys; sys.path.insert(0, sys.argv[1]); import hypno; sys.stdin.readline(); '
+                         'hypno.inject_py(int(sys.argv[2]), sys.argv[3], immediate_but_unsafe=True)')
 _PR_SET_PTRACER = 0x59616d61
 
 
@@ -221,8 +225,10 @@ def run_in_thread(thread: Thread, func: Callable, *args: Any, **kwargs: Any) -> 
     code = f'__import__("sys").modules[{__name__!r}].THREAD_COMMANDS[{target_native_id}].execute()'
     try:
         # A plain subprocess rather than multiprocessing, whose spawned child would re-run our __main__ script.
-        injector = subprocess.Popen([sys.executable, '-c', _THREAD_INJECTOR_CODE, str(target_native_id), code],
-                                    stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        hypno_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        injector = subprocess.Popen(
+            [sys.executable, '-c', _THREAD_INJECTOR_CODE, hypno_parent_dir, str(target_native_id), code],
+            stdin=subprocess.PIPE, stderr=subprocess.PIPE)
         # Under yama's ptrace_scope=1 only ancestors may ptrace us, and the injector is our child
         _set_ptracer(injector.pid)
         try:
